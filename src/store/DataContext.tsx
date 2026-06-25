@@ -130,9 +130,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        // Refresh PostgREST schema cache
-        await supabase.rpc('reload_schema').then(() => {}, () => {});
-        
         // Test connection by fetching users
         const { data: users, error } = await supabase.from('users').select('*');
         
@@ -315,19 +312,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     let user: User | undefined;
     
     if (useSupabase) {
-      const { data: users, error } = await supabase
+      const { data: users } = await supabase
         .from('users')
         .select('*')
         .eq('username', username)
-        .eq('password', password);
+        .eq('password', password)
+        .single();
       
-      if (error) {
-        console.error('Login error:', error.message);
-        return false;
-      }
-      
-      if (users && users.length > 0) {
-        user = toCamelCase(users[0]) as unknown as User;
+      if (users) {
+        user = toCamelCase(users) as unknown as User;
       }
     } else {
       user = data.users.find(u => u.username === username && u.password === password);
@@ -349,17 +342,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Users
   const addUser = useCallback(async (user: User) => {
     if (useSupabase) {
-      const { error } = await supabase.from('users').insert({
-        username: user.username,
-        password: user.password,
-        role: user.role,
-        full_name: user.fullName,
-        assigned_class: user.assignedClass || null,
-      }).select();
+      // Remove id for Supabase - let database generate UUID
+      const { id, ...userWithoutId } = user;
+      const snakeUser = toSnakeCase(userWithoutId as unknown as Record<string, unknown>);
+      const { data: result, error } = await supabase.from('users').insert(snakeUser).select().single();
       if (error) {
-        console.error('Failed to add user:', error.message, error.details, error.hint);
-        alert('Failed to add teacher: ' + error.message + (error.details ? '\nDetails: ' + error.details : '') + (error.hint ? '\nHint: ' + error.hint : ''));
+        console.error('Error adding user:', error);
+        alert('Error adding teacher: ' + error.message);
+        throw error;
       }
+      console.log('User added successfully:', result);
     } else {
       persistLocal({ ...data, users: [...data.users, user] });
     }
@@ -367,16 +359,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const updateUser = useCallback(async (user: User) => {
     if (useSupabase) {
-      const { error } = await supabase.from('users').update({
-        username: user.username,
-        password: user.password,
-        role: user.role,
-        full_name: user.fullName,
-        assigned_class: user.assignedClass || null,
-      }).eq('id', user.id);
+      const { id, ...userWithoutId } = user;
+      const snakeUser = toSnakeCase(userWithoutId as unknown as Record<string, unknown>);
+      const { error } = await supabase.from('users').update(snakeUser).eq('id', user.id);
       if (error) {
-        console.error('Failed to update user:', error.message, error.details);
-        alert('Failed to update teacher: ' + error.message);
+        console.error('Error updating user:', error);
+        alert('Error updating teacher: ' + error.message);
+        throw error;
       }
     } else {
       persistLocal({ ...data, users: data.users.map(u => u.id === user.id ? user : u) });
@@ -394,22 +383,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Students
   const addStudent = useCallback(async (student: Student) => {
     if (useSupabase) {
-      const { error } = await supabase.from('students').insert({
-        name: student.name,
-        class_name: student.className,
-        gender: student.gender,
-        date_of_birth: student.dateOfBirth || null,
-        parent_name: student.parentName || null,
-        parent_phone: student.parentPhone || null,
-        total_fees: student.totalFees,
-        fees_paid: student.feesPaid,
-        fees_balance: student.feesBalance,
-        fee_status: student.feeStatus,
-      }).select();
+      const { id, ...studentWithoutId } = student;
+      const snakeStudent = toSnakeCase(studentWithoutId as unknown as Record<string, unknown>);
+      const { data: result, error } = await supabase.from('students').insert(snakeStudent).select().single();
       if (error) {
-        console.error('Failed to add student:', error.message, error.details, error.hint);
-        alert('Failed to add student: ' + error.message + (error.hint ? '\nHint: ' + error.hint : ''));
+        console.error('Error adding student:', error);
+        alert('Error adding student: ' + error.message);
+        throw error;
       }
+      console.log('Student added successfully:', result);
     } else {
       persistLocal({ ...data, students: [...data.students, student] });
     }
@@ -417,21 +399,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const updateStudent = useCallback(async (student: Student) => {
     if (useSupabase) {
-      const { error } = await supabase.from('students').update({
-        name: student.name,
-        class_name: student.className,
-        gender: student.gender,
-        date_of_birth: student.dateOfBirth || null,
-        parent_name: student.parentName || null,
-        parent_phone: student.parentPhone || null,
-        total_fees: student.totalFees,
-        fees_paid: student.feesPaid,
-        fees_balance: student.feesBalance,
-        fee_status: student.feeStatus,
-      }).eq('id', student.id);
+      const { id, ...studentWithoutId } = student;
+      const snakeStudent = toSnakeCase(studentWithoutId as unknown as Record<string, unknown>);
+      const { error } = await supabase.from('students').update(snakeStudent).eq('id', student.id);
       if (error) {
-        console.error('Failed to update student:', error.message, error.details);
-        alert('Failed to update student: ' + error.message);
+        console.error('Error updating student:', error);
+        alert('Error updating student: ' + error.message);
+        throw error;
       }
     } else {
       persistLocal({ ...data, students: data.students.map(s => s.id === student.id ? student : s) });
@@ -466,24 +440,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Assessments
   const saveAssessments = useCallback(async (assessments: Assessment[]) => {
     if (useSupabase) {
-      const records = assessments.map(a => ({
-        student_id: a.studentId,
-        student_name: a.studentName,
-        class_name: a.className,
-        subject: a.subject,
-        class_score: a.classScore,
-        exam_score: a.examScore,
-        total: a.total,
-        grade: a.grade,
-        remark: a.remark,
-        term: a.term,
-        academic_year: a.academicYear,
-      }));
-      const { error } = await supabase.from('assessments').upsert(records, { onConflict: 'student_id,subject,term,academic_year' });
-      if (error) {
-        console.error('Failed to save assessments:', error.message, error.details);
-        alert('Failed to save assessments: ' + error.message);
-      }
+      const snakeAssessments = assessments.map(a => toSnakeCase(a as unknown as Record<string, unknown>));
+      await supabase.from('assessments').upsert(snakeAssessments, { onConflict: 'student_id,subject,term,academic_year' });
     } else {
       const existingIds = new Set(assessments.map(a => a.id));
       const filtered = data.assessments.filter(a => !existingIds.has(a.id));
@@ -535,29 +493,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     };
 
     if (useSupabase) {
-      const { error: payError } = await supabase.from('fee_payments').insert({
-        student_id: payment.studentId,
-        student_name: payment.studentName,
-        class_name: payment.className,
-        amount: payment.amount,
-        date: payment.date,
-        receipt_number: payment.receiptNumber,
-        term: payment.term,
-        academic_year: payment.academicYear,
-      });
-      if (payError) {
-        console.error('Failed to add payment:', payError.message);
-        alert('Failed to record payment: ' + payError.message);
-        return;
-      }
-      const { error: stuError } = await supabase.from('students').update({
-        fees_paid: newFeesPaid,
-        fees_balance: newBalance,
-        fee_status: updatedStudent.feeStatus,
-      }).eq('id', student.id);
-      if (stuError) {
-        console.error('Failed to update student fees:', stuError.message);
-      }
+      const snakePayment = toSnakeCase(payment as unknown as Record<string, unknown>);
+      const snakeStudent = toSnakeCase(updatedStudent as unknown as Record<string, unknown>);
+      await Promise.all([
+        supabase.from('fee_payments').insert(snakePayment),
+        supabase.from('students').update(snakeStudent).eq('id', student.id),
+      ]);
     } else {
       persistLocal({
         ...data,
@@ -635,7 +576,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Terminal Reports
   const saveTerminalReport = useCallback(async (report: TerminalReport) => {
     if (useSupabase) {
-      const { error } = await supabase.from('terminal_reports').upsert({
+      const snakeReport = {
         id: report.id,
         student_id: report.studentId,
         student_name: report.studentName,
@@ -653,11 +594,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         aggregate: report.aggregate,
         subject_positions: report.subjectPositions,
         created_at: report.createdAt,
-      }, { onConflict: 'student_id,term,academic_year' });
-      if (error) {
-        console.error('Failed to save report:', error.message);
-        alert('Failed to save report: ' + error.message);
-      }
+      };
+      await supabase.from('terminal_reports').upsert(snakeReport, { onConflict: 'student_id,term,academic_year' });
     } else {
       const exists = data.terminalReports.findIndex(r => r.id === report.id);
       let newReports;
