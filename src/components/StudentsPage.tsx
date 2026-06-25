@@ -16,18 +16,13 @@ export default function StudentsPage() {
     isAdmin ? ALL_CLASSES[0] : (currentUser?.assignedClass || ALL_CLASSES[0])
   );
   const [search, setSearch] = useState('');
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
-
-  // Simple add form - only name and gender
-  const [addName, setAddName] = useState('');
-  const [addGender, setAddGender] = useState('Male');
-
-  // Full edit form
-  const [editForm, setEditForm] = useState({
+  const [formData, setFormData] = useState({
     name: '', gender: 'Male', dateOfBirth: '', parentName: '', parentPhone: '', totalFees: 0,
   });
+
+  // Classes available based on role
 
   const students = data.students
     .filter(s => s.className === selectedClass)
@@ -35,14 +30,14 @@ export default function StudentsPage() {
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const openAddModal = () => {
-    setAddName('');
-    setAddGender('Male');
-    setShowAddModal(true);
+    setEditingStudent(null);
+    setFormData({ name: '', gender: 'Male', dateOfBirth: '', parentName: '', parentPhone: '', totalFees: 0 });
+    setShowModal(true);
   };
 
   const openEditModal = (student: Student) => {
     setEditingStudent(student);
-    setEditForm({
+    setFormData({
       name: student.name,
       gender: student.gender,
       dateOfBirth: student.dateOfBirth || '',
@@ -50,66 +45,30 @@ export default function StudentsPage() {
       parentPhone: student.parentPhone || '',
       totalFees: student.totalFees,
     });
-    setShowEditModal(true);
+    setShowModal(true);
   };
 
-  const handleAdd = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!addName.trim()) return;
-
-    const newStudent: Student = {
-      id: generateId(),
-      name: addName.trim(),
-      gender: addGender,
-      className: selectedClass,
-      dateOfBirth: '',
-      parentName: '',
-      parentPhone: '',
-      totalFees: 0,
-      feesPaid: 0,
-      feesBalance: 0,
-      feeStatus: 'pending',
-    };
-    await addStudent(newStudent);
-    setAddName('');
-    setAddGender('Male');
-    // Keep modal open so teacher can add more students quickly
-  };
-
-  const handleAddAndClose = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!addName.trim()) return;
-
-    const newStudent: Student = {
-      id: generateId(),
-      name: addName.trim(),
-      gender: addGender,
-      className: selectedClass,
-      dateOfBirth: '',
-      parentName: '',
-      parentPhone: '',
-      totalFees: 0,
-      feesPaid: 0,
-      feesBalance: 0,
-      feeStatus: 'pending',
-    };
-    await addStudent(newStudent);
-    setShowAddModal(false);
-  };
-
-  const handleEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingStudent) return;
-
-    await updateStudent({
-      ...editingStudent,
-      ...editForm,
-      feesBalance: editForm.totalFees - editingStudent.feesPaid,
-      feeStatus: (editForm.totalFees - editingStudent.feesPaid) <= 0 
-        ? 'completed' 
-        : (editingStudent.feesPaid > 0 ? 'partial' : 'pending'),
-    });
-    setShowEditModal(false);
+    if (editingStudent) {
+      await updateStudent({
+        ...editingStudent,
+        ...formData,
+        feesBalance: formData.totalFees - editingStudent.feesPaid,
+        feeStatus: (formData.totalFees - editingStudent.feesPaid) <= 0 ? 'completed' : (editingStudent.feesPaid > 0 ? 'partial' : 'pending'),
+      });
+    } else {
+      const newStudent: Student = {
+        id: generateId(),
+        className: selectedClass,
+        ...formData,
+        feesPaid: 0,
+        feesBalance: formData.totalFees,
+        feeStatus: 'pending',
+      };
+      await addStudent(newStudent);
+    }
+    setShowModal(false);
   };
 
   const handleDelete = async (id: string) => {
@@ -158,19 +117,19 @@ export default function StudentsPage() {
 
       {/* Stats bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
+        <div className="bg-white rounded-xl px-4 py-3 border border-gray-100">
           <p className="text-xs text-gray-500">Total Students</p>
           <p className="text-xl font-bold text-gray-800">{students.length}</p>
         </div>
-        <div className="bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
+        <div className="bg-white rounded-xl px-4 py-3 border border-gray-100">
           <p className="text-xs text-gray-500">Boys</p>
           <p className="text-xl font-bold text-blue-600">{students.filter(s => s.gender === 'Male').length}</p>
         </div>
-        <div className="bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
+        <div className="bg-white rounded-xl px-4 py-3 border border-gray-100">
           <p className="text-xs text-gray-500">Girls</p>
           <p className="text-xl font-bold text-pink-600">{students.filter(s => s.gender === 'Female').length}</p>
         </div>
-        <div className="bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
+        <div className="bg-white rounded-xl px-4 py-3 border border-gray-100">
           <p className="text-xs text-gray-500">Fees Completed</p>
           <p className="text-xl font-bold text-green-600">{students.filter(s => s.feeStatus === 'completed').length}</p>
         </div>
@@ -185,7 +144,8 @@ export default function StudentsPage() {
                 <th className="text-left px-4 sm:px-6 py-3 text-xs font-semibold text-gray-500 uppercase">#</th>
                 <th className="text-left px-4 sm:px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Name</th>
                 <th className="text-left px-4 sm:px-6 py-3 text-xs font-semibold text-gray-500 uppercase hidden sm:table-cell">Gender</th>
-                <th className="text-left px-4 sm:px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Fees</th>
+                <th className="text-left px-4 sm:px-6 py-3 text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Parent</th>
+                <th className="text-left px-4 sm:px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Total Fees</th>
                 <th className="text-left px-4 sm:px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
                 <th className="text-right px-4 sm:px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Actions</th>
               </tr>
@@ -193,7 +153,7 @@ export default function StudentsPage() {
             <tbody className="divide-y divide-gray-50">
               {students.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
+                  <td colSpan={7} className="px-6 py-12 text-center text-gray-400">
                     <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
                     <p className="text-sm">No students found in {selectedClass}</p>
                     <button onClick={openAddModal} className="mt-2 text-blue-600 text-sm hover:underline">
@@ -217,9 +177,8 @@ export default function StudentsPage() {
                       </div>
                     </td>
                     <td className="px-4 sm:px-6 py-3 text-sm text-gray-600 hidden sm:table-cell">{student.gender}</td>
-                    <td className="px-4 sm:px-6 py-3 text-sm font-medium text-gray-800">
-                      {student.totalFees > 0 ? `GH₵ ${student.totalFees.toLocaleString()}` : '—'}
-                    </td>
+                    <td className="px-4 sm:px-6 py-3 text-sm text-gray-600 hidden md:table-cell">{student.parentName || '—'}</td>
+                    <td className="px-4 sm:px-6 py-3 text-sm font-medium text-gray-800">GH₵ {student.totalFees.toLocaleString()}</td>
                     <td className="px-4 sm:px-6 py-3">
                       <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
                         student.feeStatus === 'completed' ? 'bg-green-50 text-green-700' :
@@ -231,10 +190,10 @@ export default function StudentsPage() {
                     </td>
                     <td className="px-4 sm:px-6 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => openEditModal(student)} className="p-2 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors" title="Edit">
+                        <button onClick={() => openEditModal(student)} className="p-2 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors">
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        <button onClick={() => handleDelete(student.id)} className="p-2 rounded-lg hover:bg-red-50 text-red-600 transition-colors" title="Delete">
+                        <button onClick={() => handleDelete(student.id)} className="p-2 rounded-lg hover:bg-red-50 text-red-600 transition-colors">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -247,168 +206,50 @@ export default function StudentsPage() {
         </div>
       </div>
 
-      {/* ===== ADD STUDENT MODAL (Simple: Name + Gender only) ===== */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800">Add Student</h3>
-                <p className="text-xs text-gray-500 mt-0.5">Adding to <strong>{selectedClass}</strong></p>
-              </div>
-              <button onClick={() => setShowAddModal(false)} className="p-2 rounded-lg hover:bg-gray-100">
-                <X className="w-5 h-5 text-gray-400" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAdd} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Full Name *</label>
-                <input
-                  type="text"
-                  value={addName}
-                  onChange={e => setAddName(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  placeholder="Enter student's full name"
-                  autoFocus
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Gender *</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setAddGender('Male')}
-                    className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
-                      addGender === 'Male'
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                    }`}
-                  >
-                    <span className="text-lg">👦</span>
-                    Male
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAddGender('Female')}
-                    className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
-                      addGender === 'Female'
-                        ? 'border-pink-500 bg-pink-50 text-pink-700'
-                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                    }`}
-                  >
-                    <span className="text-lg">👧</span>
-                    Female
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={handleAddAndClose}
-                  disabled={!addName.trim()}
-                  className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Add & Close
-                </button>
-                <button
-                  type="submit"
-                  disabled={!addName.trim()}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-medium hover:from-blue-700 hover:to-indigo-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  Add & Next
-                </button>
-              </div>
-
-              {/* Recently added indicator */}
-              {students.length > 0 && (
-                <p className="text-xs text-gray-400 text-center pt-1">
-                  {students.length} student{students.length !== 1 ? 's' : ''} in {selectedClass}
-                </p>
-              )}
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ===== EDIT STUDENT MODAL (Full details) ===== */}
-      {showEditModal && editingStudent && (
+      {/* Modal */}
+      {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800">Edit Student</h3>
-                <p className="text-xs text-gray-500 mt-0.5">{editingStudent.name}</p>
-              </div>
-              <button onClick={() => setShowEditModal(false)} className="p-2 rounded-lg hover:bg-gray-100">
+              <h3 className="text-lg font-semibold text-gray-800">
+                {editingStudent ? 'Edit Student' : 'Add New Student'}
+              </h3>
+              <button onClick={() => setShowModal(false)} className="p-2 rounded-lg hover:bg-gray-100">
                 <X className="w-5 h-5 text-gray-400" />
               </button>
             </div>
 
-            <form onSubmit={handleEdit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
                 <input
                   type="text"
-                  value={editForm.name}
-                  onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                  value={formData.name}
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                   required
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Gender *</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setEditForm({ ...editForm, gender: 'Male' })}
-                    className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border-2 transition-all ${
-                      editForm.gender === 'Male'
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                    }`}
-                  >
-                    <span>👦</span> Male
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditForm({ ...editForm, gender: 'Female' })}
-                    className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border-2 transition-all ${
-                      editForm.gender === 'Female'
-                        ? 'border-pink-500 bg-pink-50 text-pink-700'
-                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                    }`}
-                  >
-                    <span>👧</span> Female
-                  </button>
-                </div>
-              </div>
-
               <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Gender *</label>
+                  <select
+                    value={formData.gender}
+                    onChange={e => setFormData({ ...formData, gender: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  >
+                    <option>Male</option>
+                    <option>Female</option>
+                  </select>
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
                   <input
                     type="date"
-                    value={editForm.dateOfBirth}
-                    onChange={e => setEditForm({ ...editForm, dateOfBirth: e.target.value })}
+                    value={formData.dateOfBirth}
+                    onChange={e => setFormData({ ...formData, dateOfBirth: e.target.value })}
                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Total Fees (GH₵)</label>
-                  <input
-                    type="number"
-                    value={editForm.totalFees || ''}
-                    onChange={e => setEditForm({ ...editForm, totalFees: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
                   />
                 </div>
               </div>
@@ -417,10 +258,9 @@ export default function StudentsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Parent/Guardian Name</label>
                 <input
                   type="text"
-                  value={editForm.parentName}
-                  onChange={e => setEditForm({ ...editForm, parentName: e.target.value })}
+                  value={formData.parentName}
+                  onChange={e => setFormData({ ...formData, parentName: e.target.value })}
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  placeholder="Parent or guardian name"
                 />
               </div>
 
@@ -428,37 +268,31 @@ export default function StudentsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Parent Phone</label>
                 <input
                   type="tel"
-                  value={editForm.parentPhone}
-                  onChange={e => setEditForm({ ...editForm, parentPhone: e.target.value })}
+                  value={formData.parentPhone}
+                  onChange={e => setFormData({ ...formData, parentPhone: e.target.value })}
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  placeholder="Phone number"
                 />
               </div>
 
-              {/* Fee summary */}
-              {editingStudent.totalFees > 0 && (
-                <div className="bg-gray-50 rounded-xl p-3 text-sm space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Total Fees:</span>
-                    <span className="font-medium">GH₵ {editingStudent.totalFees.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Paid:</span>
-                    <span className="font-medium text-green-600">GH₵ {editingStudent.feesPaid.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Balance:</span>
-                    <span className="font-medium text-red-600">GH₵ {Math.max(0, editingStudent.feesBalance).toLocaleString()}</span>
-                  </div>
-                </div>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Total Fees (GH₵) *</label>
+                <input
+                  type="number"
+                  value={formData.totalFees}
+                  onChange={e => setFormData({ ...formData, totalFees: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  min="0"
+                  step="0.01"
+                  required
+                />
+              </div>
 
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowEditModal(false)} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+              <div className="flex gap-3 pt-4">
+                <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                   Cancel
                 </button>
                 <button type="submit" className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-medium hover:from-blue-700 hover:to-indigo-700 transition-all">
-                  Update Student
+                  {editingStudent ? 'Update Student' : 'Add Student'}
                 </button>
               </div>
             </form>
